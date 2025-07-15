@@ -1,0 +1,11 @@
+- m4:
+    inter: |-
+      def «inter»:
+        if type != "array" then error("want array \($__loc__)")
+        elif length == 0 then error("empty array \($__loc__)")
+        elif map(type == "array") | all | not then error("want array of arrays\($__loc__)")
+        elif length == 1 then .[0]
+        elif length == 2 then .[0] - (.[0] - .[1])
+        else [(.[:2] | «inter»), (.[2:] | «inter»)] | «inter» end;
+
+- { ns: std, id: «inter», jq: inter «inter» }

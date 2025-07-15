@@ -1,0 +1,51 @@
+- ns: dupar
+
+- id: split-by-head-match
+  jq: |
+    def f(f):
+      def u($i; f): if $i | f then [[$i], first] else [first + [$i], null] end;
+      def e($i; f): if $i | f then last // empty else empty end;
+      foreach inputs as $i ([null, null]; u($i; f); e($i; f));
+      inputs | f(test($s))
+  sh: self -nR --arg s ${1:?}
+
+- id: normalize-date
+  jq: |
+    . as $set | (first / ".")[1] | strptime("%Y%m%dT%H%M%SZ")
+    | todateiso8601 as $date | { $date, $set }
+
+- id: older-than
+  jq: |
+    ($date | fromdateiso8601) as $older
+    | (.date | fromdateiso8601) as $date | select($date < $older)
+  sh: |-
+    : ${2:?}; self --arg date "$(date +%FT%TZ -d "$* ago")"
+
+- id: duplicity-archive-sets
+  sh: split-by-head-match duplicity-full-signatures | normalize-date
+
+- { id: weeks, sh: weeks=4  }
+
+- id: old-duplicity-archive-sets
+  sh: weeks; duplicity-archive-sets | older-than ${1:-$weeks} weeks
+
+- id: rm-old-duplicity-archive-sets
+  jq: |
+    "# \(.date)", "rm \(.set | join(" "))"
+  sh: weeks; old-duplicity-archive-sets ${2:-$weeks} | self -r | ${1:?}
+  tt: |
+    rm-old-duplicity-archive-sets cat 3
+    rm-old-duplicity-archive-sets dash 3
+
+- id: dir
+  sh: dir=/space/duplicity/archive/${backup:-backup5}+$(hostname -s)
+
+- id: on-sets
+  sh: |-
+    : ${2:?}; dir; cd $dir+$2; command ls -tr | $ns:$1-duplicity-archive-sets ${@:3}
+
+- id: show-sets
+  sh: on-sets old "$@"
+
+- id: rm-sets
+  sh: on-sets rm-old "$@"

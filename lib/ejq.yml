@@ -1,0 +1,20 @@
+- ns: EJQ
+
+- id: p1
+  jq: |-
+    def data: { data: (reduce (.. | objects | select(has("data"))) as $data ({}; . * $data) | .data) };
+    def body: { body: delpaths([path(.. | objects | select(has("data")))]) };
+    def jq(t): ("jq" + t) as $jq | { ($jq): (body | [ path(.. | objects | select(has($jq))) as $p | [ $p, getpath($p)[$jq] ]]) };
+    data + body + jq("e") + jq("d")
+
+- id: p2
+  jq: |-
+    def emit(t): ("jq" + t) as $jq | .[$jq] | if t == "d" then map(last + " .") else map("setpath(\(first); $data | \(last))") end;
+    tojson + "\n | .data as $data | " + (emit("d") + emit("e") | join(" | ") + ".body | delpaths([path(.. | objects | select(has(\"jqd\")))])[0]")
+  sh: self -r
+
+- id: pretty
+  sh: awk 'NR == 1 { print | "jq"; close("jq"); } NR != 1'
+
+- id: ejq
+  sh: yq -oj | p1 | p2 | pretty | jq -nf /dev/stdin
